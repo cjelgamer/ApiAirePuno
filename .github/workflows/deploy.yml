@@ -1,0 +1,46 @@
+name: Validate and deploy API Aire Puno
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-aire-puno-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the service container
+        run: docker build --tag api-aire-puno:${{ github.sha }} .
+
+      - name: Deploy the validated revision to Render
+        if: github.ref == 'refs/heads/main'
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          test -n "$RENDER_DEPLOY_HOOK" || { echo 'Configure the RENDER_DEPLOY_HOOK secret.'; exit 1; }
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK"
+
+      - name: Wait for the service health check
+        if: github.ref == 'refs/heads/main'
+        env:
+          PUNO_API_BASE_URL: ${{ vars.PUNO_API_BASE_URL }}
+        run: |
+          test -n "$PUNO_API_BASE_URL" || { echo 'Configure the PUNO_API_BASE_URL repository variable.'; exit 1; }
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "$PUNO_API_BASE_URL/health"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'The deployed service did not become healthy in time.'
+          exit 1

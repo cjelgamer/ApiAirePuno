@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: api-aire-puno
+    runtime: docker
+    plan: free
+    region: oregon
+    autoDeployTrigger: off
+    healthCheckPath: /health
+    envVars:
+      - key: AIRPREDICT_ORIGINS
+        value: https://airpredict-4u3c.onrender.com
+      - key: CACHE_SECONDS
+        value: "900"
